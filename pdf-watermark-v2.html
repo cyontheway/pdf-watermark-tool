@@ -607,6 +607,32 @@
                 </div>
             </div>
 
+            <div class="slider-group" style="margin-top: 16px;">
+                <div class="slider-item">
+                    <div class="slider-header">
+                        <span class="form-label">水印密度</span>
+                        <span class="slider-value" id="densityValue">50%</span>
+                    </div>
+                    <input type="range" id="density" min="10" max="100" value="50">
+                </div>
+
+                <div class="slider-item">
+                    <div class="slider-header">
+                        <span class="form-label">X 偏移</span>
+                        <span class="slider-value" id="offsetXValue">0</span>
+                    </div>
+                    <input type="range" id="offsetX" min="-200" max="200" value="0">
+                </div>
+
+                <div class="slider-item">
+                    <div class="slider-header">
+                        <span class="form-label">Y 偏移</span>
+                        <span class="slider-value" id="offsetYValue">0</span>
+                    </div>
+                    <input type="range" id="offsetY" min="-200" max="200" value="0">
+                </div>
+            </div>
+
             <div class="form-group" style="margin-top: 20px;">
                 <label class="form-label">水印颜色</label>
                 <div class="color-section">
@@ -709,6 +735,9 @@
         const fontSizeSlider = $('fontSize');
         const opacitySlider = $('opacity');
         const rotationSlider = $('rotation');
+        const densitySlider = $('density');
+        const offsetXSlider = $('offsetX');
+        const offsetYSlider = $('offsetY');
         const colorPicker = $('watermarkColor');
         const previewCanvasPortrait = $('previewCanvasPortrait');
         const previewCanvasLandscape = $('previewCanvasLandscape');
@@ -776,6 +805,9 @@
             const fontSize = parseInt(fontSizeSlider.value);
             const opacity = parseInt(opacitySlider.value) / 100;
             const rotation = parseInt(rotationSlider.value);
+            const density = parseInt(densitySlider.value);
+            const ofsX = parseInt(offsetXSlider.value) * 0.35;
+            const ofsY = parseInt(offsetYSlider.value) * 0.35;
             const color = colorPicker.value;
             const radians = (rotation * Math.PI) / 180;
 
@@ -808,14 +840,16 @@
             const textW = metrics.width;
 
             // 计算间距
-            const gapX = scaledFontSize * 3;
-            const gapY = scaledFontSize * 2.5;
+            // 计算间距（密度越高，间距越小）
+            const spacingFactor = (110 - density) / 60;
+            const gapX = scaledFontSize * 3 * spacingFactor;
+            const gapY = scaledFontSize * 2.5 * spacingFactor;
             const blockW = textW + gapX;
             const blockH = scaledFontSize + gapY;
 
             // 移动到中心并旋转
             ctx.save();
-            ctx.translate(pageW / 2, pageH / 2);
+            ctx.translate(pageW / 2 + ofsX, pageH / 2 + ofsY);
             ctx.rotate(radians);
 
             // 设置水印样式
@@ -964,6 +998,21 @@
             renderPreview();
         });
 
+        densitySlider.addEventListener('input', e => {
+            $('densityValue').textContent = e.target.value + '%';
+            renderPreview();
+        });
+
+        offsetXSlider.addEventListener('input', e => {
+            $('offsetXValue').textContent = e.target.value;
+            renderPreview();
+        });
+
+        offsetYSlider.addEventListener('input', e => {
+            $('offsetYValue').textContent = e.target.value;
+            renderPreview();
+        });
+
         colorPicker.addEventListener('input', e => {
             $('colorHex').textContent = e.target.value.toUpperCase();
             renderPreview();
@@ -1012,7 +1061,7 @@
             const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
             const pages = pdfDoc.getPages();
 
-            const { text, fontSize, opacity, rotation, color } = settings;
+            const { text, fontSize, opacity, rotation, color, density, offsetX, offsetY } = settings;
             const rgb = hexToRgb(color);
             const userRadians = (rotation * Math.PI) / 180;
 
@@ -1022,9 +1071,10 @@
             measureCtx.font = fontSize + 'px "Microsoft YaHei", "PingFang SC", sans-serif';
             const textW = measureCtx.measureText(text).width;
 
-            // 计算间距
-            const gapX = fontSize * 3;
-            const gapY = fontSize * 2.5;
+            // 计算间距（密度越高，间距越小）
+            const spacingFactor = (110 - density) / 60;
+            const gapX = fontSize * 3 * spacingFactor;
+            const gapY = fontSize * 2.5 * spacingFactor;
             const blockW = textW + gapX;
             const blockH = fontSize + gapY;
 
@@ -1032,10 +1082,12 @@
                 const pageRot = page.getRotation().angle || 0;
                 const { width: rawW, height: rawH } = page.getSize();
 
+                // 实际显示尺寸（考虑页面旋转）
                 const isRotated = (pageRot === 90 || pageRot === 270);
                 const dispW = isRotated ? rawH : rawW;
                 const dispH = isRotated ? rawW : rawH;
 
+                // Canvas 按实际显示尺寸的对角线
                 const diagonal = Math.sqrt(dispW * dispW + dispH * dispH);
                 const cvSize = Math.ceil(diagonal) + 100;
 
@@ -1050,7 +1102,7 @@
                 ctx.fillStyle = color;
                 ctx.globalAlpha = opacity / 100;
 
-                ctx.translate(cvSize / 2, cvSize / 2);
+                ctx.translate(cvSize / 2 + offsetX, cvSize / 2 + offsetY);
                 ctx.rotate(userRadians);
 
                 const cols = Math.ceil(cvSize / blockW) + 2;
@@ -1067,6 +1119,7 @@
                 const pngBytes = Uint8Array.from(atob(pngDataUrl.split(',')[1]), ch => ch.charCodeAt(0));
                 const pngImage = await pdfDoc.embedPng(pngBytes);
 
+                // 根据页面旋转计算正确的放置位置和角度
                 const imgOpts = { width: cvSize, height: cvSize };
 
                 if (pageRot === 0) {
@@ -1110,6 +1163,9 @@
                 fontSize: parseInt(fontSizeSlider.value),
                 opacity: parseInt(opacitySlider.value),
                 rotation: parseInt(rotationSlider.value),
+                density: parseInt(densitySlider.value),
+                offsetX: parseInt(offsetXSlider.value),
+                offsetY: parseInt(offsetYSlider.value),
                 color: colorPicker.value
             };
 
