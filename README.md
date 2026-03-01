@@ -1,4 +1,4 @@
-# PDF Watermark Tool (纯本地 PDF 水印工具)
+# PDF Watermark Tool (离线 PDF 水印工具)
 
 基于浏览器的纯前端 PDF 水印添加工具。无需安装任何软件，无需上传文件到服务器，安全、离线可用。
 
